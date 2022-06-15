@@ -174,7 +174,8 @@ def main():
         UTC = "%02d:%02d"%(UTC[3],UTC[4])
         return PDT,UTC
 
-    with open("Schedule.csv", 'w') as f:
+    filename = args.targetlist.split(".")[0]
+    with open(filename+"_Sched.csv", 'w') as f:
         f.write("Object,PDT,UTC,PDT End,UTC End,Ra,Dec,Exposure Time(s),Mag\n")
         sunsetPDT,sunsetUTC = gethour(sunset)
         sunrisePDT,sunriseUTC = gethour(sunrise)
@@ -207,7 +208,6 @@ def main():
         plottime = np.array([tt[3]+tt[4]/60.+tt[5]/60./60. for tt in times.to_value("ymdhms")])*u.hour
         ax.plot(plottime, targetaltazs.secz,label=target["target"])
     #start,finish = np.array([tt[3]+tt[4]/60.+tt[5]/60./60. for tt in Time(ax.get_xlim(),format="jd").ymdhms])*u.hour
-    
     #print(Time(ax.get_xlim(),format="jd").ymdhms)
     #plottime = times - 8*u.hour
     ax.set_xlabel("UTC")
@@ -221,7 +221,7 @@ def main():
     ax.legend(loc='upper right')
     ax.set_ylim(3, 1)
     ax.set_ylabel('Airmass')
-    plt.savefig('Sched3.png')
+    plt.savefig(filename+'_Sched.png')
     plt.show()
 
 

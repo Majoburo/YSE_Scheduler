@@ -14,6 +14,18 @@
 2022blq               12 28 33.45 +08 52 14.58 2000 mag = 18.96 comment = nice YSE SN Ia
 2020aekp              15 43 11.39 +17 48 47.24 2000 mag = 18.55 comment = long-lived SN Ia-CSM, got an HST UV spectrum this Fall
 2021yja               03 24 21.18 -21 33 56.20 2000 mag = 16.59 comment = Twilight target, last time observable
-2022dvj               05 01 28.27 +21 39 16.51 2000 mag = 16.17 comment = Young SN Ia in dwarf galaxy
+2022czy               12 22 01.13 +16 59 44.10 2000 mag = 18.38 comment = YSE SLSN
+2022dqi               15 53 43.52 +24 00 02.45 2000 mag = 18.72 comment = YSE SN Ia
+2022crr               15 24 49.14 -21 23 21.75 2000 mag = 17.04 comment = KITS bright SN Ic-BL
+2022mm                11 58 25.12 -14 31 11.50 2000 mag = 17.76 comment = KITS SN II
 2022bse               07 01 02.30 +51 15 55.68 2000 mag = 18.99 comment = KITS low-velocity SN II
+2022bdu               09 36 52.18 +37 41 38.99 2000 mag = 17.73 comment = KITS SN Ic
+2022abq               13 22 56.82 +28 19 08.87 2000 mag = 16.60 comment = KITS SN II
+2022jo                13 00 37.67 +28 03 25.77 2000 mag = 17.75 comment = nice KITS SN II
+2022baw               12 48 50.18 +37 14 51.76 2000 mag = 17.83 comment = KITS SN Ia, a little weird
+2021smj               12 26 46.56 +08 52 57.64 2000 mag = 19.70 comment = nebular SN Ia
 2022blm               06 21 50.92 +00 22 01.49 2000 mag = 17.26 comment = very reddened SN Ia
+2022dvj               05 01 28.27 +21 39 16.51 2000 mag = 16.17 comment = Young SN Ia in dwarf galaxy
+2021adlw              11 41 17.82 +36 32 34.57 2000 mag = 17.87 comment = low luminosity Type II
+2022dml               16 17 29.13 +14 25 04.53 2000 mag = 18.11 comment = young SN II w/ flash features
+2022dsn               13 07 22.41 +19 21 16.64 2000 mag = 18.50 comment = SN classification, filler target
