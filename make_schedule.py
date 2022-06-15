@@ -98,7 +98,7 @@ def main():
     # sorting by setting time and the ones that don't set, keeping by RA
     argtargets,argtime = np.where(np.diff((airmasses>=3)*1)==1)
     a = argtargets[np.argsort(argtime)]
-    df.index=np.append(a,list(set(np.arange(18)).difference(a)))
+    df.index=np.append(a,list(set(np.arange(len(df))).difference(a)))
     df.sort_index(inplace=True)
 
     def is_observable(time,dt,setting):
@@ -196,8 +196,9 @@ def main():
             exp = round((target['end']- target['start']).sec)
             f.write("%s,%s,%s,%s,%s,%s,%s,%s,%s\n"%(target['target'],PDT,UTC,PDT_END,UTC_END,target['RA'],target['DEC'],exp,target['mag']))
 
-    fig = plt.figure()
-    ax = fig.add_axes([0.12,0.15,0.75,0.8])
+    fig = plt.figure(figsize=(8, 6), dpi=80)
+    ax = fig.add_axes([0.12,0.15,0.7,0.8])
+    #ax.(right=0.2)
     for i,target in sched.iterrows():
         dt = target["end"] - target["start"]
         times = target["start"] + dt * np.linspace(0., 1., 100)-8
@@ -218,9 +219,10 @@ def main():
     #axtop.set_xbound(ax.get_xbound())
     #axtop.set_xticklabels(["%02d:00"%((x - 8)%12) for x in ax.get_xticks()])
     #axtop.set_xlabel("UTC")
-    ax.legend(loc='upper right')
+    ax.legend(bbox_to_anchor =(1.25, 1.0))
     ax.set_ylim(3, 1)
     ax.set_ylabel('Airmass')
+    #fig.tight_layout()
     plt.savefig(filename+'_Sched.png')
     plt.show()
 
