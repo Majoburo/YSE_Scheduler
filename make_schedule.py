@@ -7,7 +7,6 @@ from astropy.coordinates import SkyCoord, EarthLocation, AltAz
 from astropy.coordinates import get_sun
 from scipy.interpolate import interp1d
 import argparse
-from datetime import datetime
 
 
 def parse_args():
@@ -56,8 +55,8 @@ def main():
     alt12 = np.diff((sunaltazs.alt.value>-12))
     alt18 = np.diff((sunaltazs.alt.value>-18))
     sunset, sunrise = times[1:][alt0]
-    mtwi12, etwi12 = times[1:][alt12]
-    mtwi18, etwi18 = times[1:][alt18]
+    etwi12, mtwi12 = times[1:][alt12]
+    etwi18, mtwi18 = times[1:][alt18]
 
     #Making a minutes timeframe for the night
     dt = sunrise - sunset
@@ -170,9 +169,9 @@ def main():
 
     def gethour(time):
         PDT = (time - 8*u.hour).ymdhms
-        PDT = "%s:%s"%(PDT[3],PDT[4])
+        PDT = "%02d:%02d"%(PDT[3],PDT[4])
         UTC = time.ymdhms
-        UTC = "%s:%s"%(UTC[3],UTC[4])
+        UTC = "%02d:%02d"%(UTC[3],UTC[4])
         return PDT,UTC
 
     with open("Schedule.csv", 'w') as f:
@@ -191,37 +190,40 @@ def main():
         f.write("Sunrise,%s,%s\n"%(sunrisePDT,sunriseUTC))
         f.write("\n")
         for _,target in sched.iterrows():
-            PDT = (target['start'] - 8*u.hour).ymdhms
-            PDT = "%s:%2d"%(PDT[3],PDT[4])
-            UTC = target['start'].ymdhms
-            UTC = "%s:%2d"%(UTC[3],UTC[4])
-            PDT_END = (target['end'] - 8*u.hour).ymdhms
-            PDT_END = "%s:%2d"%(PDT_END[3],PDT_END[4])
-            UTC_END = target['end'].ymdhms
-            UTC_END = "%s:%2d"%(UTC_END[3],UTC_END[4])
+            PDT, UTC = gethour(target['start'])
+            PDT_END, UTC_END = gethour(target['end'])
             exp = round((target['end']- target['start']).sec)
             f.write("%s,%s,%s,%s,%s,%s,%s,%s,%s\n"%(target['target'],PDT,UTC,PDT_END,UTC_END,target['RA'],target['DEC'],exp,target['mag']))
 
-    #times = midnight + delta_midnight
+    fig = plt.figure()
+    ax = fig.add_axes([0.12,0.15,0.75,0.8])
     for i,target in sched.iterrows():
         dt = target["end"] - target["start"]
-        times = target["start"] + dt * np.linspace(0., 1., 100)
+        times = target["start"] + dt * np.linspace(0., 1., 100)-8
         frame = AltAz(obstime=times, location=lick_obs)
         radec = "%s %s"%(target["RA"],target["DEC"])
         coords = SkyCoord(radec,unit=(u.hourangle, u.deg))
         targetaltazs = coords.transform_to(frame)
-        plottime = np.array([tt[3]+tt[4]/60.+tt[5]/60./60 for tt in times.to_value("ymdhms")])*u.hour
-        plt.plot(plottime, targetaltazs.secz,label=target["target"])
-    #plt.fill_between(delta_midnight, 0*u.deg, 90*u.deg,
-    #             sunaltazs_July12_to_13.alt < -0*u.deg, color='0.5', zorder=0)
-    #plt.xlim(-12*u.hour, 12*u.hour)
-    #plt.xticks((np.arange(13)*2-12)*u.hour)
-    plt.legend(loc='upper right')
-    plt.ylim(3, 1)
-    plt.xlabel('UTC time')
-    plt.ylabel('Airmass')
+        plottime = np.array([tt[3]+tt[4]/60.+tt[5]/60./60. for tt in times.to_value("ymdhms")])*u.hour
+        ax.plot(plottime, targetaltazs.secz,label=target["target"])
+    #start,finish = np.array([tt[3]+tt[4]/60.+tt[5]/60./60. for tt in Time(ax.get_xlim(),format="jd").ymdhms])*u.hour
+    
+    #print(Time(ax.get_xlim(),format="jd").ymdhms)
+    #plottime = times - 8*u.hour
+    ax.set_xlabel("UTC")
+    ax.set_xticks(ax.get_xticks())
+    ax.set_xticklabels(["%02d:00"%x for x in ax.get_xticks()])
+    #axtop = ax.twiny()
+    #axtop.set_xticks(ax.get_xticks())
+    #axtop.set_xbound(ax.get_xbound())
+    #axtop.set_xticklabels(["%02d:00"%((x - 8)%12) for x in ax.get_xticks()])
+    #axtop.set_xlabel("UTC")
+    ax.legend(loc='upper right')
+    ax.set_ylim(3, 1)
+    ax.set_ylabel('Airmass')
     plt.savefig('Sched3.png')
     plt.show()
+
 
 
 if __name__ == '__main__':
