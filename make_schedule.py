@@ -18,8 +18,12 @@ def parse_args():
                         help = 'fmt: yyyy-mm-dd. Date of observations. Superseeds taking the time from the filename.')
     parser.add_argument('--x', dest='x',
                         default = 2,
-                        help = 'Number of total exposure times before min airmass to star scheduling targets.')
-
+                        type = float,
+                        help = 'Sets x in minimum(30min, 30min^(1+x)*exptime^-x) - exptime/2 where [exptime] = minutes')
+    parser.add_argument('--min', dest='min',
+                        default = 30,
+                        type = float,
+                        help = 'Sets min in minimum(min, min^(1+x)*exptime^-x) - exptime/2 where [exptime] = minutes')
     args = parser.parse_args()
 
     return args
@@ -126,7 +130,7 @@ def main():
             "start":[start],
             "end":[end],
             "mag":[df["mag"]],
-            "priority:":[df["priority"]]
+            "priority":[df["priority"]]
         })
 
         sched = pd.concat([sched, entry], ignore_index=True)
@@ -134,12 +138,14 @@ def main():
     priorities = list(set(df["priority"]))
     while current_time < times[-1]:
         skipped_all=True
-        #for x in range(1,4):
         for priority in priorities:
             df_group = df[df["priority"] == priority]
             for i,target in df_group.iterrows():
                 if i in target_list:
                     continue
+                boundtime = min(args.min, args.min**(1+x)*(target["exp_time"].sec/60)**(-x)) + target["exp_time"].sec/60/2
+                boundtime = boundtime*u.min
+                print(boundtime)
                 if is_setting(current_time,target["top_time"]):
                     if is_observable(current_time,target["exp_time"],target["set_time"]):
                         start = current_time
@@ -149,10 +155,10 @@ def main():
                         target_list.append(i)
                         skipped_all = False
                         current_time = current_time +dt
-                        break
+                        continue
                     else:
                         continue
-                elif current_time + x*target["exp_time"]> target["top_time"]:
+                elif current_time + boundtime > target["top_time"]:
                     start = current_time
                     current_time = current_time + target["exp_time"]
                     end = current_time
@@ -160,10 +166,7 @@ def main():
                     target_list.append(i)
                     skipped_all=False
                     current_time = current_time +dt
-                    break
-                #curr_fr = AltAz(obstime=current_time, location=lick_obs)
-                #tar_airmass = target.transform_to(curr_fr).secz
-                #elif tar_airmass<target
+                    continue
         if skipped_all:
             current_time = current_time + dt
 
@@ -199,6 +202,8 @@ def main():
     fig = plt.figure(figsize=(8, 6), dpi=80)
     ax = fig.add_axes([0.12,0.15,0.7,0.8])
     #ax.(right=0.2)
+    color_priorities = ['autumn','summer','winter']
+    from matplotlib import cm
     for i,target in sched.iterrows():
         dt = target["end"] - target["start"]
         times = target["start"] + dt * np.linspace(0., 1., 100)-8
@@ -207,7 +212,8 @@ def main():
         coords = SkyCoord(radec,unit=(u.hourangle, u.deg))
         targetaltazs = coords.transform_to(frame)
         plottime = np.array([tt[3]+tt[4]/60.+tt[5]/60./60. for tt in times.to_value("ymdhms")])*u.hour
-        ax.plot(plottime, targetaltazs.secz,label=target["target"])
+        cmap = cm.get_cmap(color_priorities[target['priority']-1])
+        ax.plot(plottime, targetaltazs.secz,label=target["target"],color = cmap(1))
     #start,finish = np.array([tt[3]+tt[4]/60.+tt[5]/60./60. for tt in Time(ax.get_xlim(),format="jd").ymdhms])*u.hour
     #print(Time(ax.get_xlim(),format="jd").ymdhms)
     #plottime = times - 8*u.hour
