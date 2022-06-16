@@ -216,6 +216,7 @@ def main():
 
     fig = plt.figure(figsize=(8, 6), dpi=80)
     ax = fig.add_axes([0.12,0.15,0.7,0.7])
+    style =["solid",(0,(5,1)),(0,(1,1))]
     for i,target in sched.iterrows():
         dt = target["end"] - target["start"]
         times = target["start"] + dt * np.linspace(0., 1., 100)-8
@@ -224,8 +225,9 @@ def main():
         coords = SkyCoord(radec,unit=(u.hourangle, u.deg))
         targetaltazs = coords.transform_to(frame)
         plottime = np.array([tt[3]+tt[4]/60.+tt[5]/60./60. for tt in times.to_value("ymdhms")])*u.hour
-        cmap = cm.get_cmap('terrain')
-        ax.plot(plottime, targetaltazs.secz,label=target["target"],color = cmap(i/len(sched)),linewidth=4-target['priority'])
+        cmap = cm.get_cmap('Dark2')
+        #ax.plot(plottime, targetaltazs.secz,label=target["target"],color = cmap(i/len(sched)),linestyle=style[target['priority']-1])
+        ax.plot(plottime, targetaltazs.secz,label=target["target"],linestyle=style[target['priority']-1])
     plt.axvline(x=sunsethour,color='orange')
     plt.axvline(x=sunrisehour,color='orange')
     plt.axvline(x=etw12hour)
@@ -241,8 +243,17 @@ def main():
     axtop.set_xticklabels(["%02d:00"%((x - 8)%12) for x in ax.get_xticks()])
     axtop.set_xlabel("PDT")
     ax.legend(bbox_to_anchor =(1.25, 1.0))
-    ax.set_ylim(3, 1)
+    ax.set_ylim(3, 0.9)
     ax.set_ylabel('Airmass')
+    plot_lines=[]
+    l1, = ax.plot(np.NaN,np.NaN, linestyle=style[0],color='black')
+    l2, = ax.plot(np.NaN,np.NaN, linestyle=style[1],color='black')
+    l3, = ax.plot(np.NaN,np.NaN, linestyle=style[2],color='black')
+
+    plot_lines.append([l1, l2, l3])
+
+    legend1 = plt.legend(plot_lines[0], ["priority 1", "priority 2", "priority 3"], bbox_to_anchor =(1.25, 0.0))
+    plt.gca().add_artist(legend1)
     plt.savefig(filename+'_Sched.png')
     plt.show()
 
