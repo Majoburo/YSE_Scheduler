@@ -2,7 +2,7 @@
 
 Simple observation scheduler for YSE-PZ.
 
-To reproduce the needed environment run: `conda env create -f sched.yml`
+To reproduce the needed environment run: `conda env create -f sched.yml; conda activate sched`
 
 Requires a column after mag = ? that sets priority (check example file ShanePriority_2022-03-06.txt).
 
