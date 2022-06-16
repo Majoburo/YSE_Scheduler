@@ -6,6 +6,7 @@ from astropy.time import Time,TimeDelta
 from astropy.coordinates import SkyCoord, EarthLocation, AltAz
 from astropy.coordinates import get_sun
 from scipy.interpolate import interp1d
+from matplotlib import cm
 import argparse
 
 
@@ -63,7 +64,7 @@ def main():
     etwi18, mtwi18 = times[1:][alt18]
 
     #Making a minutes timeframe for the night
-    dt = sunrise - sunset
+    dt = mtwi12 - etwi12
     dt.format = 'sec'
     mins = round(dt.value/60)
     times = sunset + dt * np.linspace(0., 1., mins)
@@ -122,7 +123,8 @@ def main():
     target_list = []
 
     sched = pd.DataFrame(columns=["target","RA","DEC","start","end","mag","priority"])
-    def fill_sched(sched,df,start,end):
+
+    def fill_sched(schedu,df,start,end):
         entry = pd.DataFrame.from_dict({
             "target": [df["name"]],
             "RA":  ["%s:%s:%s"%(df["ra_h"],df["ra_m"],df["ra_s"])],
@@ -133,59 +135,70 @@ def main():
             "priority":[df["priority"]]
         })
 
-        sched = pd.concat([sched, entry], ignore_index=True)
-        return sched
-    priorities = list(set(df["priority"]))
-    while current_time < times[-1]:
-        skipped_all=True
-        for priority in priorities:
-            df_group = df[df["priority"] == priority]
-            for i,target in df_group.iterrows():
-                if i in target_list:
-                    continue
-                boundtime = min(args.min, args.min**(1+x)*(target["exp_time"].sec/60)**(-x)) + target["exp_time"].sec/60/2
-                boundtime = boundtime*u.min
-                print(boundtime)
-                if is_setting(current_time,target["top_time"]):
-                    if is_observable(current_time,target["exp_time"],target["set_time"]):
+        schedu = pd.concat([schedu, entry], ignore_index=True)
+        return schedu
+
+    def schedule(current_time,stop_time,df,target_list,schedu):
+        priorities = list(set(df["priority"]))
+        while current_time < stop_time:
+            skipped_all=True
+            for priority in priorities:
+                df_group = df[df["priority"] == priority]
+                for i,target in df_group.iterrows():
+                    if i in target_list:
+                        continue
+                    boundtime = min(args.min, args.min**(1+x)*(target["exp_time"].sec/60)**(-x)) + target["exp_time"].sec/60/2
+                    boundtime = boundtime*u.min
+                    if is_setting(current_time,target["top_time"]):
+                        if is_observable(current_time,target["exp_time"],target["set_time"]):
+                            start = current_time
+                            current_time = current_time + target["exp_time"]
+                            end = current_time
+                            schedu = fill_sched(schedu,target,start,end)
+                            target_list.append(i)
+                            skipped_all = False
+                            current_time = current_time +dt
+                            continue
+                        else:
+                            continue
+                    elif current_time + boundtime > target["top_time"]:
                         start = current_time
                         current_time = current_time + target["exp_time"]
                         end = current_time
-                        sched = fill_sched(sched,target,start,end)
+                        #import pdb
+                        #pdb.set_trace()
+                        schedu = fill_sched(schedu,target,start,end)
                         target_list.append(i)
-                        skipped_all = False
+                        skipped_all=False
                         current_time = current_time +dt
                         continue
-                    else:
-                        continue
-                elif current_time + boundtime > target["top_time"]:
-                    start = current_time
-                    current_time = current_time + target["exp_time"]
-                    end = current_time
-                    sched = fill_sched(sched,target,start,end)
-                    target_list.append(i)
-                    skipped_all=False
-                    current_time = current_time +dt
-                    continue
-        if skipped_all:
-            current_time = current_time + dt
+            if skipped_all:
+                current_time = current_time + dt
+        return current_time,target_list,schedu
+
+    twitar = df[df["exp_time"]>700]
+    current_time, target_list,sched = schedule(current_time,etwi18,twitar,target_list,sched)
+    current_time, target_list,sched = schedule(current_time,times[-1],df,target_list,sched)
+    current_time, target_list,sched = schedule(current_time,mtwi18,twitar,target_list,sched)
+    print(sched)
 
     def gethour(time):
         PDT = (time - 8*u.hour).ymdhms
         PDT = "%02d:%02d"%(PDT[3],PDT[4])
         UTC = time.ymdhms
+        utchour = float(UTC[3])+float(UTC[4])/60
         UTC = "%02d:%02d"%(UTC[3],UTC[4])
-        return PDT,UTC
+        return PDT,UTC, utchour
 
     filename = args.targetlist.split(".")[0]
     with open(filename+"_Sched.csv", 'w') as f:
         f.write("Object,PDT,UTC,PDT End,UTC End,Ra,Dec,Exposure Time(s),Mag\n")
-        sunsetPDT,sunsetUTC = gethour(sunset)
-        sunrisePDT,sunriseUTC = gethour(sunrise)
-        mtwi12PDT, mtwi12UTC = gethour(mtwi12)
-        etwi12PDT, etwi12UTC = gethour(etwi12)
-        mtwi18PDT, mtwi18UTC = gethour(mtwi12)
-        etwi18PDT, etwi18UTC = gethour(etwi12)
+        sunsetPDT,sunsetUTC,sunsethour = gethour(sunset)
+        sunrisePDT,sunriseUTC,sunrisehour = gethour(sunrise)
+        mtwi12PDT, mtwi12UTC,mtw12hour = gethour(mtwi12)
+        etwi12PDT, etwi12UTC,etw12hour = gethour(etwi12)
+        mtwi18PDT, mtwi18UTC,mtw18hour = gethour(mtwi18)
+        etwi18PDT, etwi18UTC,etw18hour = gethour(etwi18)
         f.write("Sunset,%s,%s\n"%(sunsetPDT,sunsetUTC))
         f.write("12 deg,%s,%s\n"%(etwi12PDT, etwi12UTC))
         f.write("18 deg,%s,%s\n"%(etwi18PDT, etwi18UTC))
@@ -194,16 +207,13 @@ def main():
         f.write("Sunrise,%s,%s\n"%(sunrisePDT,sunriseUTC))
         f.write("\n")
         for _,target in sched.iterrows():
-            PDT, UTC = gethour(target['start'])
-            PDT_END, UTC_END = gethour(target['end'])
+            PDT, UTC,_ = gethour(target['start'])
+            PDT_END, UTC_END,_ = gethour(target['end'])
             exp = round((target['end']- target['start']).sec)
             f.write("%s,%s,%s,%s,%s,%s,%s,%s,%s\n"%(target['target'],PDT,UTC,PDT_END,UTC_END,target['RA'],target['DEC'],exp,target['mag']))
 
     fig = plt.figure(figsize=(8, 6), dpi=80)
-    ax = fig.add_axes([0.12,0.15,0.7,0.8])
-    #ax.(right=0.2)
-    color_priorities = ['Reds','Blues','Greens']
-    from matplotlib import cm
+    ax = fig.add_axes([0.12,0.15,0.7,0.7])
     for i,target in sched.iterrows():
         dt = target["end"] - target["start"]
         times = target["start"] + dt * np.linspace(0., 1., 100)-8
@@ -214,21 +224,23 @@ def main():
         plottime = np.array([tt[3]+tt[4]/60.+tt[5]/60./60. for tt in times.to_value("ymdhms")])*u.hour
         cmap = cm.get_cmap('terrain')
         ax.plot(plottime, targetaltazs.secz,label=target["target"],color = cmap(i/len(sched)),linewidth=4-target['priority'])
-    #start,finish = np.array([tt[3]+tt[4]/60.+tt[5]/60./60. for tt in Time(ax.get_xlim(),format="jd").ymdhms])*u.hour
-    #print(Time(ax.get_xlim(),format="jd").ymdhms)
-    #plottime = times - 8*u.hour
+    plt.axvline(x=sunsethour,color='orange')
+    plt.axvline(x=sunrisehour,color='orange')
+    plt.axvline(x=etw12hour)
+    plt.axvline(x=mtw12hour)
+    plt.axvline(x=etw18hour,color='black')
+    plt.axvline(x=mtw18hour,color='black')
     ax.set_xlabel("UTC")
     ax.set_xticks(ax.get_xticks())
     ax.set_xticklabels(["%02d:00"%x for x in ax.get_xticks()])
-    #axtop = ax.twiny()
-    #axtop.set_xticks(ax.get_xticks())
-    #axtop.set_xbound(ax.get_xbound())
-    #axtop.set_xticklabels(["%02d:00"%((x - 8)%12) for x in ax.get_xticks()])
-    #axtop.set_xlabel("UTC")
+    axtop = ax.twiny()
+    axtop.set_xticks(ax.get_xticks())
+    axtop.set_xbound(ax.get_xbound())
+    axtop.set_xticklabels(["%02d:00"%((x - 8)%12) for x in ax.get_xticks()])
+    axtop.set_xlabel("PDT")
     ax.legend(bbox_to_anchor =(1.25, 1.0))
     ax.set_ylim(3, 1)
     ax.set_ylabel('Airmass')
-    #fig.tight_layout()
     plt.savefig(filename+'_Sched.png')
     plt.show()
 
