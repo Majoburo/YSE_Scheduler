@@ -67,7 +67,7 @@ def main():
     dt = mtwi12 - etwi12
     dt.format = 'sec'
     mins = round(dt.value/60)
-    times = sunset + dt * np.linspace(0., 1., mins)
+    times = etwi12 + dt * np.linspace(0., 1., mins)
     frame = AltAz(obstime=times, location=lick_obs)
 
     #Read in target list
@@ -101,11 +101,14 @@ def main():
     df["set_time"] = np.array(set_time)
     airmasses = np.array(airmasses)
     # sorting by setting time and the ones that don't set, sorting by RA
-    argtargets,argtime = np.where(np.diff((airmasses>=3)*1)==1)
-    a = argtargets[np.argsort(argtime)]
-    df.index=np.append(a,list(set(np.arange(len(df))).difference(a)))
-    df.sort_index(inplace=True)
-
+    #import pdb
+    #pdb.set_trace()
+    #argtargets,argtime = np.where(np.diff((airmasses>=3)*1)==1)
+    #a = argtargets[np.argsort(argtime)]
+    #df.index = np.append(a,list(set(np.arange(len(df))).difference(a)))
+    #df.sort_index(inplace=True)
+    #df.index.name = "settingorder"
+    df.sort_values(by=['priority','top_time'],ascending=[True,True],inplace=True)
     def is_observable(time,dt,setting):
         if time+dt < setting:
             return True
@@ -142,41 +145,39 @@ def main():
         priorities = list(set(df["priority"]))
         while current_time < stop_time:
             skipped_all=True
-            for priority in priorities:
-                df_group = df[df["priority"] == priority]
-                for i,target in df_group.iterrows():
-                    if i in target_list:
-                        continue
-                    boundtime = min(args.min, args.min**(1+x)*(target["exp_time"].sec/60)**(-x)) + target["exp_time"].sec/60/2
-                    boundtime = boundtime*u.min
-                    if is_observable(current_time,target["exp_time"],target["set_time"]):
-                        if is_setting(current_time,target["top_time"]):
-                            start = current_time
-                            current_time = current_time + target["exp_time"]
-                            end = current_time
-                            schedu = fill_sched(schedu,target,start,end)
-                            target_list.append(i)
-                            skipped_all = False
-                            current_time = current_time +dt
-                            #print(target['name'])
-                            #print(boundtime-target["exp_time"].sec/60/2*u.min)
-                            continue
-                        elif current_time + boundtime > target["top_time"]:
-                            start = current_time
-                            current_time = current_time + target["exp_time"]
-                            end = current_time
-                            schedu = fill_sched(schedu,target,start,end)
-                            target_list.append(i)
-                            skipped_all=False
-                            current_time = current_time +dt
-                            #print(target['name'])
-                            #print(boundtime-target["exp_time"].sec/60/2*u.min)
-                            continue
+            for i,target in df.iterrows():
+                if i in target_list:
+                    continue
+                boundtime = min(args.min, args.min**(1+x)*(target["exp_time"].sec/60)**(-x)) + target["exp_time"].sec/60/2
+                boundtime = boundtime*u.min
+                if is_observable(current_time,target["exp_time"],target["set_time"]):
+                    if is_setting(current_time,target["top_time"]):
+                        start = current_time
+                        current_time = current_time + target["exp_time"]
+                        end = current_time
+                        schedu = fill_sched(schedu,target,start,end)
+                        target_list.append(i)
+                        skipped_all = False
+                        current_time = current_time +dt
+                        #print(target['name'])
+                        #print(boundtime-target["exp_time"].sec/60/2*u.min)
+                        break
+                    elif current_time + boundtime > target["top_time"]:
+                        start = current_time
+                        current_time = current_time + target["exp_time"]
+                        end = current_time
+                        schedu = fill_sched(schedu,target,start,end)
+                        target_list.append(i)
+                        skipped_all=False
+                        current_time = current_time +dt
+                        #print(target['name'])
+                        #print(boundtime-target["exp_time"].sec/60/2*u.min)
+                        break
             if skipped_all:
                 current_time = current_time + dt
         return current_time,target_list,schedu
 
-    twitar = df[df["mag"]<15]
+    twitar = df[df["mag"]<17]
     current_time, target_list,sched = schedule(current_time,etwi18,twitar,target_list,sched)
     current_time, target_list,sched = schedule(current_time,mtwi18,df,target_list,sched)
     current_time, target_list,sched = schedule(current_time,times[-1],twitar,target_list,sched)
