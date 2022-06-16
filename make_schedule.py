@@ -100,7 +100,7 @@ def main():
     df["top_time"] = np.array(alts)
     df["set_time"] = np.array(set_time)
     airmasses = np.array(airmasses)
-    # sorting by setting time and the ones that don't set, keeping by RA
+    # sorting by setting time and the ones that don't set, sorting by RA
     argtargets,argtime = np.where(np.diff((airmasses>=3)*1)==1)
     a = argtargets[np.argsort(argtime)]
     df.index=np.append(a,list(set(np.arange(len(df))).difference(a)))
@@ -165,8 +165,6 @@ def main():
                             start = current_time
                             current_time = current_time + target["exp_time"]
                             end = current_time
-                            #import pdb
-                            #pdb.set_trace()
                             schedu = fill_sched(schedu,target,start,end)
                             target_list.append(i)
                             skipped_all=False
@@ -193,6 +191,9 @@ def main():
         return PDT,UTC, utchour
 
     filename = args.targetlist.split(".")[0]
+
+    # Time to write things to a csv file
+
     with open(filename+"_Sched.csv", 'w') as f:
         f.write("Object,PDT,UTC,PDT End,UTC End,Ra,Dec,Exposure Time(s),Mag\n")
         sunsetPDT,sunsetUTC,sunsethour = gethour(sunset)
@@ -214,6 +215,8 @@ def main():
             exp = round((target['end']- target['start']).sec)
             f.write("%s,%s,%s,%s,%s,%s,%s,%s,%s\n"%(target['target'],PDT,UTC,PDT_END,UTC_END,target['RA'],target['DEC'],exp,target['mag']))
 
+    # Here be the plotting
+
     fig = plt.figure(figsize=(8, 6), dpi=80)
     ax = fig.add_axes([0.12,0.15,0.7,0.7])
     style =["solid",(0,(5,1)),(0,(1,1))]
@@ -226,7 +229,6 @@ def main():
         targetaltazs = coords.transform_to(frame)
         plottime = np.array([tt[3]+tt[4]/60.+tt[5]/60./60. for tt in times.to_value("ymdhms")])*u.hour
         cmap = cm.get_cmap('Dark2')
-        #ax.plot(plottime, targetaltazs.secz,label=target["target"],color = cmap(i/len(sched)),linestyle=style[target['priority']-1])
         ax.plot(plottime, targetaltazs.secz,label=target["target"],linestyle=style[target['priority']-1])
     plt.axvline(x=sunsethour,color='orange')
     plt.axvline(x=sunrisehour,color='orange')
