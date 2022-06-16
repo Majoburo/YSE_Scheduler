@@ -29,6 +29,9 @@ def parse_args():
                         default = 15,
                         type = float,
                         help = 'Sets min magnitude for twilight targets.')
+    parser.add_argument('--takesetting', dest='takesetting',
+                        action='store_false',
+                        help = 'Always take a target if setting.')
     args = parser.parse_args()
 
     return args
@@ -155,18 +158,11 @@ def main():
                 boundtime = min(args.min, args.min**(1+x)*(target["exp_time"].sec/60)**(-x)) + target["exp_time"].sec/60/2
                 boundtime = boundtime*u.min
                 if is_observable(current_time,target["exp_time"],target["set_time"]):
-                    if is_setting(current_time,target["top_time"]):
-                        start = current_time
-                        current_time = current_time + target["exp_time"]
-                        end = current_time
-                        schedu = fill_sched(schedu,target,start,end)
-                        target_list.append(i)
-                        skipped_all = False
-                        current_time = current_time +dt
-                        #print(target['name'])
-                        #print(boundtime)#-target["exp_time"].sec/60/2*u.min)
-                        break
-                    elif current_time + boundtime > target["top_time"]:
+                    if args.takesetting:
+                        timediff = abs(target["top_time"] - current_time)
+                    else:
+                        timediff = target["top_time"] - current_time
+                    if boundtime > timediff:
                         start = current_time
                         current_time = current_time + target["exp_time"]
                         end = current_time
