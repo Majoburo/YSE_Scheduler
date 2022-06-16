@@ -25,6 +25,10 @@ def parse_args():
                         default = 30,
                         type = float,
                         help = 'Sets min in minimum(min, min^(1+x)*exptime^-x) where [exptime] = minutes')
+    parser.add_argument('--twimag', dest='twimag',
+                        default = 15,
+                        type = float,
+                        help = 'Sets min magnitude for twilight targets.')
     args = parser.parse_args()
 
     return args
@@ -177,7 +181,7 @@ def main():
                 current_time = current_time + dt
         return current_time,target_list,schedu
 
-    twitar = df[df["mag"]<17]
+    twitar = df[df["mag"]<args.twimag]
     current_time, target_list,sched = schedule(current_time,etwi18,twitar,target_list,sched)
     current_time, target_list,sched = schedule(current_time,mtwi18,df,target_list,sched)
     current_time, target_list,sched = schedule(current_time,times[-1],twitar,target_list,sched)
