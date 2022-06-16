@@ -202,7 +202,7 @@ def main():
     fig = plt.figure(figsize=(8, 6), dpi=80)
     ax = fig.add_axes([0.12,0.15,0.7,0.8])
     #ax.(right=0.2)
-    color_priorities = ['autumn','summer','winter']
+    color_priorities = ['Reds','Blues','Greens']
     from matplotlib import cm
     for i,target in sched.iterrows():
         dt = target["end"] - target["start"]
@@ -212,8 +212,8 @@ def main():
         coords = SkyCoord(radec,unit=(u.hourangle, u.deg))
         targetaltazs = coords.transform_to(frame)
         plottime = np.array([tt[3]+tt[4]/60.+tt[5]/60./60. for tt in times.to_value("ymdhms")])*u.hour
-        cmap = cm.get_cmap(color_priorities[target['priority']-1])
-        ax.plot(plottime, targetaltazs.secz,label=target["target"],color = cmap(1))
+        cmap = cm.get_cmap('terrain')
+        ax.plot(plottime, targetaltazs.secz,label=target["target"],color = cmap(i/len(sched)),linewidth=4-target['priority'])
     #start,finish = np.array([tt[3]+tt[4]/60.+tt[5]/60./60. for tt in Time(ax.get_xlim(),format="jd").ymdhms])*u.hour
     #print(Time(ax.get_xlim(),format="jd").ymdhms)
     #plottime = times - 8*u.hour
