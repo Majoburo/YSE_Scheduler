@@ -18,13 +18,13 @@ def parse_args():
                         type = Time,
                         help = 'fmt: yyyy-mm-dd. Date of observations. Superseeds taking the time from the filename.')
     parser.add_argument('--x', dest='x',
-                        default = 2,
+                        default = 1,
                         type = float,
-                        help = 'Sets x in minimum(30min, 30min^(1+x)*exptime^-x) - exptime/2 where [exptime] = minutes')
+                        help = 'Sets x in minimum(min, min^(1+x)*exptime^-x) where [exptime] = minutes')
     parser.add_argument('--min', dest='min',
                         default = 30,
                         type = float,
-                        help = 'Sets min in minimum(min, min^(1+x)*exptime^-x) - exptime/2 where [exptime] = minutes')
+                        help = 'Sets min in minimum(min, min^(1+x)*exptime^-x) where [exptime] = minutes')
     args = parser.parse_args()
 
     return args
