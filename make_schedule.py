@@ -164,7 +164,7 @@ def main():
                         skipped_all = False
                         current_time = current_time +dt
                         #print(target['name'])
-                        #print(boundtime-target["exp_time"].sec/60/2*u.min)
+                        #print(boundtime)#-target["exp_time"].sec/60/2*u.min)
                         break
                     elif current_time + boundtime > target["top_time"]:
                         start = current_time
@@ -175,7 +175,7 @@ def main():
                         skipped_all=False
                         current_time = current_time +dt
                         #print(target['name'])
-                        #print(boundtime-target["exp_time"].sec/60/2*u.min)
+                        #print(boundtime)#-target["exp_time"].sec/60/2*u.min)
                         break
             if skipped_all:
                 current_time = current_time + dt
@@ -227,7 +227,7 @@ def main():
     style =["solid",(0,(5,1)),(0,(1,1))]
     for i,target in sched.iterrows():
         dt = target["end"] - target["start"]
-        times = target["start"] + dt * np.linspace(0., 1., 100)-8
+        times = target["start"] + dt * np.linspace(0., 1., 100)
         frame = AltAz(obstime=times, location=lick_obs)
         radec = "%s %s"%(target["RA"],target["DEC"])
         coords = SkyCoord(radec,unit=(u.hourangle, u.deg))
@@ -235,6 +235,17 @@ def main():
         plottime = np.array([tt[3]+tt[4]/60.+tt[5]/60./60. for tt in times.to_value("ymdhms")])*u.hour
         cmap = cm.get_cmap('Dark2')
         ax.plot(plottime, targetaltazs.secz,label=target["target"],linestyle=style[target['priority']-1])
+    #for i,target in sched[sched['target']=='2022crv'].iterrows():
+    #    dt = sunrise - sunset
+    #    times = sunset + dt * np.linspace(0., 1., 100)#-8
+    #    frame = AltAz(obstime=times, location=lick_obs)
+    #    radec = "%s %s"%(target["RA"],target["DEC"])
+    #    coords = SkyCoord(radec,unit=(u.hourangle, u.deg))
+    #    targetaltazs = coords.transform_to(frame)
+    #    print(plottime[np.argmax(targetaltazs.secz)])
+    #    plottime = np.array([tt[3]+tt[4]/60.+tt[5]/60./60. for tt in times.to_value("ymdhms")])*u.hour
+    #    cmap = cm.get_cmap('Dark2')
+    #    ax.plot(plottime, targetaltazs.secz,label=target["target"],linestyle=style[target['priority']-1])
     plt.axvline(x=sunsethour,color='orange')
     plt.axvline(x=sunrisehour,color='orange')
     plt.axvline(x=etw12hour)
