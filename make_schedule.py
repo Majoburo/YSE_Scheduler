@@ -8,12 +8,15 @@ from astropy.coordinates import get_sun
 from scipy.interpolate import interp1d
 from matplotlib import cm
 import argparse
+import configparser
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Schedule targets for the night for Shane (FIRST DRAFT).')
     parser.add_argument('targetlist',
                         help = 'YSE-PZ format schedule with priority column as in example file.')
+    parser.add_argument('instrument',
+            help = 'Instrument. Options: KAST, NIRES')
     parser.add_argument('--date', dest='date',
                         type = Time,
                         help = 'fmt: yyyy-mm-dd. Date of observations. Superseeds taking the time from the filename.')
@@ -32,26 +35,97 @@ def parse_args():
     parser.add_argument('--takesetting', dest='takesetting',
                         action='store_false',
                         help = 'Always take a target if setting.')
+    parser.add_argument('--start', dest='start',
+                        type = Time,
+                        help = 'fmt: yyyy-mm-dd hh:mm:ss (UTC). When to start observations')
+    parser.add_argument('--end', dest='end',
+                        type = Time,
+                        help = 'fmt: yyyy-mm-dd hh:mm:ss (UTC). When to finish observations.')
     args = parser.parse_args()
 
     return args
 
 
-def exposure_time(mag):
+def exposure_time(mag,data):
     #Calculates Exposure Times
-    data = np.loadtxt("exposure_kast.dat")
     exp = interp1d(data[:,0],data[:,1],kind="nearest",fill_value="extrapolate")
-    n_blue = interp1d(data[:,0],data[:,2],kind="nearest",fill_value="extrapolate")
-    n_red = interp1d(data[:,0],data[:,3],kind="nearest",fill_value="extrapolate")
-    exp_red = exp(mag)*60//n_red(mag)
-    exp_blue = exp(mag)*60//n_blue(mag) + 15*np.ceil(n_red(mag)/n_blue(mag))
-    return int(exp(mag)), n_red(mag), exp_red, n_blue(mag), exp_blue
+    #n_blue = interp1d(data[:,0],data[:,2],kind="nearest",fill_value="extrapolate")
+    #n_red = interp1d(data[:,0],data[:,3],kind="nearest",fill_value="extrapolate")
+    #exp_red = exp(mag)*60//n_red(mag)
+    #exp_blue = exp(mag)*60//n_blue(mag) + 15*np.ceil(n_red(mag)/n_blue(mag))
+    return int(exp(mag))#, n_red(mag), exp_red, n_blue(mag), exp_blue
 
+def fill_sched(schedu,df,start,end):
+    entry = pd.DataFrame.from_dict({
+        "target": [df["name"]],
+        "RA":  ["%s:%s:%s"%(df["ra_h"],df["ra_m"],df["ra_s"])],
+        "DEC": ["%s:%s:%s"%(df["dec_d"],df["dec_m"],df["dec_s"])],
+        "start":[start],
+        "end":[end],
+        "mag":[df["mag"]],
+        "priority":[df["priority"]]
+    })
+
+    schedu = pd.concat([schedu, entry], ignore_index=True)
+    return schedu
+
+def schedule(current_time,stop_time,df,target_list,schedu,dt,args):
+    priorities = list(set(df["priority"]))
+    while current_time < stop_time:
+        skipped_all=True
+        for i,target in df.iterrows():
+            if i in target_list:
+                continue
+            boundtime = min(args.min, args.min**(1+args.x)*(target["exp_time"].sec/60)**(-args.x)) + target["exp_time"].sec/60/2
+            boundtime = boundtime*u.min
+            if is_observable(current_time,target["exp_time"],target["set_time"]):
+                if args.takesetting:
+                    timediff = abs(target["top_time"] - current_time)
+                else:
+                    timediff = target["top_time"] - current_time
+                if boundtime > timediff:
+                    start = current_time
+                    current_time = current_time + target["exp_time"]
+                    end = current_time
+                    schedu = fill_sched(schedu,target,start,end)
+                    target_list.append(i)
+                    skipped_all=False
+                    current_time = current_time +dt
+                    #print(target['name'])
+                    #print(boundtime)#-target["exp_time"].sec/60/2*u.min)
+                    break
+        if skipped_all:
+            current_time = current_time + dt
+    return current_time,target_list,schedu
+
+def is_observable(time,dt,setting):
+    if time+dt < setting:
+        return True
+    else:
+        return False
+def is_setting(time,toptime):
+    if time >= toptime:
+        return True
+    else:
+        return False
+
+def gethour(time):
+    PDT = (time - 8*u.hour).ymdhms
+    PDT = "%02d:%02d"%(PDT[3],PDT[4])
+    UTC = time.ymdhms
+    utchour = float(UTC[3])+float(UTC[4])/60
+    UTC = "%02d:%02d"%(UTC[3],UTC[4])
+    return PDT,UTC, utchour
 
 def main():
     args = parse_args()
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+    inst = args.instrument
     # Establish observatory, sunset and twighlights
-    lick_obs = EarthLocation(lat=37.341389*u.deg, lon=-121.642778*u.deg, height=1290*u.m)
+    obs = EarthLocation(lat=float(config[inst]['lat'])*u.deg,
+            lon=float(config[inst]['lon'])*u.deg, 
+            height=float(config[inst]['height'])*u.m)
     utcoffset = -8*u.hour  # Assuming Pacific Time (Lick)
     if args.date:
         midnight = args.date - utcoffset
@@ -61,7 +135,7 @@ def main():
 
     delta_midnight = np.linspace(-12, 12, 1000)*u.hour
     times = midnight + delta_midnight
-    frame = AltAz(obstime=times, location=lick_obs)
+    frame = AltAz(obstime=times, location=obs)
     sunaltazs = get_sun(times).transform_to(frame)
     alt0 = np.diff((sunaltazs.alt.value>0))
     alt12 = np.diff((sunaltazs.alt.value>-12))
@@ -75,7 +149,7 @@ def main():
     dt.format = 'sec'
     mins = round(dt.value/60)
     times = etwi12 + dt * np.linspace(0., 1., mins)
-    frame = AltAz(obstime=times, location=lick_obs)
+    frame = AltAz(obstime=times, location=obs)
 
     #Read in target list
     df = pd.read_csv(args.targetlist,delim_whitespace=True,skiprows=1, names= ["name","ra_h","ra_m","ra_s",'dec_d','dec_m','dec_s',"mag","priority"],usecols=[0,1,2,3,4,5,6,10,11])
@@ -101,7 +175,8 @@ def main():
         else:
             set_time.append(times[-1])
         alts.append(times[np.argmin(airmass)])
-        dt = TimeDelta(exposure_time(df.iloc[i]['mag'])[0]*u.min)
+        expdata = np.loadtxt(config[inst]['exp_file'])
+        dt = TimeDelta(exposure_time(df.iloc[i]['mag'],expdata)*u.min)
         dts.append(dt)
     df["exp_time"] = np.array(dts)
     df["top_time"] = np.array(alts)
@@ -116,16 +191,6 @@ def main():
     #df.sort_index(inplace=True)
     #df.index.name = "settingorder"
     df.sort_values(by=['priority','top_time'],ascending=[True,True],inplace=True)
-    def is_observable(time,dt,setting):
-        if time+dt < setting:
-            return True
-        else:
-            return False
-    def is_setting(time,toptime):
-        if time >= toptime:
-            return True
-        else:
-            return False
 
     current_time = times[0]
     dt = TimeDelta(5*u.min)
@@ -134,62 +199,12 @@ def main():
 
     sched = pd.DataFrame(columns=["target","RA","DEC","start","end","mag","priority"])
 
-    def fill_sched(schedu,df,start,end):
-        entry = pd.DataFrame.from_dict({
-            "target": [df["name"]],
-            "RA":  ["%s:%s:%s"%(df["ra_h"],df["ra_m"],df["ra_s"])],
-            "DEC": ["%s:%s:%s"%(df["dec_d"],df["dec_m"],df["dec_s"])],
-            "start":[start],
-            "end":[end],
-            "mag":[df["mag"]],
-            "priority":[df["priority"]]
-        })
-
-        schedu = pd.concat([schedu, entry], ignore_index=True)
-        return schedu
-
-    def schedule(current_time,stop_time,df,target_list,schedu):
-        priorities = list(set(df["priority"]))
-        while current_time < stop_time:
-            skipped_all=True
-            for i,target in df.iterrows():
-                if i in target_list:
-                    continue
-                boundtime = min(args.min, args.min**(1+x)*(target["exp_time"].sec/60)**(-x)) + target["exp_time"].sec/60/2
-                boundtime = boundtime*u.min
-                if is_observable(current_time,target["exp_time"],target["set_time"]):
-                    if args.takesetting:
-                        timediff = abs(target["top_time"] - current_time)
-                    else:
-                        timediff = target["top_time"] - current_time
-                    if boundtime > timediff:
-                        start = current_time
-                        current_time = current_time + target["exp_time"]
-                        end = current_time
-                        schedu = fill_sched(schedu,target,start,end)
-                        target_list.append(i)
-                        skipped_all=False
-                        current_time = current_time +dt
-                        #print(target['name'])
-                        #print(boundtime)#-target["exp_time"].sec/60/2*u.min)
-                        break
-            if skipped_all:
-                current_time = current_time + dt
-        return current_time,target_list,schedu
-
     twitar = df[df["mag"]<args.twimag]
-    current_time, target_list,sched = schedule(current_time,etwi18,twitar,target_list,sched)
-    current_time, target_list,sched = schedule(current_time,mtwi18,df,target_list,sched)
-    current_time, target_list,sched = schedule(current_time,times[-1],twitar,target_list,sched)
+    current_time, target_list,sched = schedule(current_time,etwi18,twitar,target_list,sched,dt,args)
+    current_time, target_list,sched = schedule(current_time,mtwi18,df,target_list,sched,dt,args)
+    current_time, target_list,sched = schedule(current_time,times[-1],twitar,target_list,sched,dt,args)
     print(sched)
 
-    def gethour(time):
-        PDT = (time - 8*u.hour).ymdhms
-        PDT = "%02d:%02d"%(PDT[3],PDT[4])
-        UTC = time.ymdhms
-        utchour = float(UTC[3])+float(UTC[4])/60
-        UTC = "%02d:%02d"%(UTC[3],UTC[4])
-        return PDT,UTC, utchour
 
     filename = args.targetlist.split(".")[0]
 
@@ -224,7 +239,7 @@ def main():
     for i,target in sched.iterrows():
         dt = target["end"] - target["start"]
         times = target["start"] + dt * np.linspace(0., 1., 100)
-        frame = AltAz(obstime=times, location=lick_obs)
+        frame = AltAz(obstime=times, location=obs)
         radec = "%s %s"%(target["RA"],target["DEC"])
         coords = SkyCoord(radec,unit=(u.hourangle, u.deg))
         targetaltazs = coords.transform_to(frame)
