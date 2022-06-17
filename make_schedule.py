@@ -145,10 +145,17 @@ def main():
     etwi18, mtwi18 = times[1:][alt18]
 
     #Making a minutes timeframe for the night
-    dt = mtwi12 - etwi12
+    framestart= etwi12
+    frameend= mtwi12
+    if args.start:
+        framestart = args.start
+    if args.end:
+        frameend = args.end
+
+    dt = frameend-framestart
     dt.format = 'sec'
     mins = round(dt.value/60)
-    times = etwi12 + dt * np.linspace(0., 1., mins)
+    times = framestart + dt * np.linspace(0., 1., mins)
     frame = AltAz(obstime=times, location=obs)
 
     #Read in target list
