@@ -37,10 +37,10 @@ def parse_args():
                         help = 'Always take a target if setting.')
     parser.add_argument('--start', dest='start',
                         type = Time,
-                        help = 'fmt: yyyy-mm-dd hh:mm:ss (UTC). When to start observations')
+                        help = 'fmt: yyyy-mm-ddThh:mm:ss (UTC). When to start observations')
     parser.add_argument('--end', dest='end',
                         type = Time,
-                        help = 'fmt: yyyy-mm-dd hh:mm:ss (UTC). When to finish observations.')
+                        help = 'fmt: yyyy-mm-ddThh:mm:ss (UTC). When to finish observations.')
     args = parser.parse_args()
 
     return args
