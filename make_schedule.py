@@ -12,7 +12,7 @@ import configparser
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Schedule targets for the night for Shane (FIRST DRAFT).')
+    parser = argparse.ArgumentParser(description='Schedule targets for the night (FIRST DRAFT).')
     parser.add_argument('targetlist',
                         help = 'YSE-PZ format schedule with priority column as in example file.')
     parser.add_argument('instrument',
