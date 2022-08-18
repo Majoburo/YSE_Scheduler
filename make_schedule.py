@@ -35,6 +35,10 @@ def parse_args():
     parser.add_argument('--takesetting', dest='takesetting',
                         action='store_false',
                         help = 'Always take a target if setting.')
+    parser.add_argument('--fluxstd', dest='fluxstd',
+                        default="flux_std.dat",
+                        type = str,
+                        help = 'Append flux standards in file.')
     parser.add_argument('--manual', dest='manual',
                         action='store_true',
                         help = 'Manual mode, take all targets in the list order.')
@@ -72,13 +76,58 @@ def fill_sched(schedu,df,start,end):
     schedu = pd.concat([schedu, entry], ignore_index=True)
     return schedu
 
+def set_exptime(target_list,manual,config,frame,times,inst):
+    #Read in target list
+    df = pd.read_csv(target_list,delim_whitespace=True,skiprows=1, names= ["name","ra_h","ra_m","ra_s",'dec_d','dec_m','dec_s',"mag","priority"],usecols=[0,1,2,3,4,5,6,10,11])
+    
+    if not manual:
+        df = df.sort_values(by=['ra_h','ra_m','ra_s'])
+    radec = np.array(["%.0d:%.0d:%.2f %.0d:%.0d:%.2f"%(i[0],i[1],i[2],i[3],i[4],i[5]) for i in df[['ra_h','ra_m','ra_s','dec_d','dec_m','dec_s']].to_numpy()])
+    targets = SkyCoord(radec,unit=(u.hourangle, u.deg))
+    #For each target get the minimum airmass
+    #airmasses=[]
+    dts=[]
+    alts=[]
+    set_time=[]
+    #import pdb
+    #pdb.set_trace()
+    for i,target in enumerate(targets):
+        airmass = target.transform_to(frame).secz
+        mask = airmass<1
+        airmass[mask] = 999
+        #airmasses.append(airmass)
+        if min(airmass)>2.5:
+            print("%s has a minimum airmass higher than 2.5!"%df.iloc[i]['name'])
+            #eliminate target here TODO
+        settime = times[:-1][np.diff((airmass>=3)*1)==1]
+        if len(settime)>0:
+            set_time.append(settime[0])
+        else:
+            set_time.append(times[-1])
+        alts.append(times[np.argmin(airmass)])
+        expdata = np.loadtxt(config[inst]['exp_file'])
+        dt = TimeDelta(exposure_time(df.iloc[i]['mag'],expdata)*u.min)
+        dts.append(dt)
+    df["exp_time"] = np.array(dts)
+    df["top_time"] = np.array(alts)
+    df["set_time"] = np.array(set_time)
+    if not manual:
+        df.sort_values(by=['priority','top_time'],ascending=[True,True],inplace=True)
+    #airmasses = np.array(airmasses)
+    return df
+
 def schedule(current_time,stop_time,df,target_list,schedu,dt,args):
     priorities = list(set(df["priority"]))
+    #current_length=len(target_list)
     while current_time < stop_time:
         skipped_all=True
-        for i,target in df.iterrows():
-            if i in target_list:
+        #if len(target_list)>10:
+        #    import pdb
+        #    pdb.set_trace()
+        for j,target in df.iterrows():
+            if j in target_list:
                 continue
+
             boundtime = min(args.min, args.min**(1+args.x)*(target["exp_time"].sec/60)**(-args.x)) + target["exp_time"].sec/60/2
             boundtime = boundtime*u.min
             if is_observable(current_time,target["exp_time"],target["set_time"]):
@@ -87,7 +136,7 @@ def schedule(current_time,stop_time,df,target_list,schedu,dt,args):
                     current_time = current_time + target["exp_time"]
                     end = current_time
                     schedu = fill_sched(schedu,target,start,end)
-                    target_list.append(i)
+                    target_list.append(j)
                     skipped_all=False
                     current_time = current_time +dt
                     break
@@ -100,7 +149,7 @@ def schedule(current_time,stop_time,df,target_list,schedu,dt,args):
                     current_time = current_time + target["exp_time"]
                     end = current_time
                     schedu = fill_sched(schedu,target,start,end)
-                    target_list.append(i)
+                    target_list.append(j)
                     skipped_all=False
                     current_time = current_time +dt
                     break
@@ -168,51 +217,10 @@ def main():
     times = framestart + dt * np.linspace(0., 1., mins)
     frame = AltAz(obstime=times, location=obs)
 
-    #Read in target list
-    df = pd.read_csv(args.targetlist,delim_whitespace=True,skiprows=1, names= ["name","ra_h","ra_m","ra_s",'dec_d','dec_m','dec_s',"mag","priority"],usecols=[0,1,2,3,4,5,6,10,11])
-    
-    if not args.manual:
-        df = df.sort_values(by=['ra_h','ra_m','ra_s'])
-    radec = np.array(["%.0d:%.0d:%.2f %.0d:%.0d:%.2f"%(i[0],i[1],i[2],i[3],i[4],i[5]) for i in df[['ra_h','ra_m','ra_s','dec_d','dec_m','dec_s']].to_numpy()])
-    targets = SkyCoord(radec,unit=(u.hourangle, u.deg))
-    #For each target get the minimum airmass
-    airmasses=[]
-    dts=[]
-    alts=[]
-    set_time=[]
-    for i,target in enumerate(targets):
-        airmass = target.transform_to(frame).secz
-        mask = airmass<1
-        airmass[mask] = 999
-        airmasses.append(airmass)
-        if min(airmass)>2.5:
-            print("%s has a minimum airmass higher than 2.5!"%df.iloc[i]['name'])
-            #eliminate target here TODO
-        settime = times[:-1][np.diff((airmass>=3)*1)==1]
-        if len(settime)>0:
-            set_time.append(settime[0])
-        else:
-            set_time.append(times[-1])
-        alts.append(times[np.argmin(airmass)])
-        expdata = np.loadtxt(config[inst]['exp_file'])
-        dt = TimeDelta(exposure_time(df.iloc[i]['mag'],expdata)*u.min)
-        dts.append(dt)
-    df["exp_time"] = np.array(dts)
-    df["top_time"] = np.array(alts)
-    df["set_time"] = np.array(set_time)
-    airmasses = np.array(airmasses)
-    # sorting by setting time and the ones that don't set, sorting by RA
-    #import pdb
-    #pdb.set_trace()
-    #argtargets,argtime = np.where(np.diff((airmasses>=3)*1)==1)
-    #a = argtargets[np.argsort(argtime)]
-    #df.index = np.append(a,list(set(np.arange(len(df))).difference(a)))
-    #df.sort_index(inplace=True)
-    #df.index.name = "settingorder"
- 
-    if not args.manual:
-        df.sort_values(by=['priority','top_time'],ascending=[True,True],inplace=True)
-
+    fluxtar = set_exptime(args.fluxstd,True,config,frame,times,inst)
+    df = set_exptime(args.targetlist,args.manual,config,frame,times,inst)
+    df = pd.concat([fluxtar.iloc[:2],df,fluxtar.iloc[2:]])
+    df = df.reset_index(drop=True)
     current_time = times[0]
     dt = TimeDelta(5*u.min)
     x = args.x
@@ -221,9 +229,13 @@ def main():
     sched = pd.DataFrame(columns=["target","RA","DEC","start","end","mag","priority"])
 
     twitar = df[df["mag"]<args.twimag]
-    current_time, target_list,sched = schedule(current_time,etwi12,twitar,target_list,sched,dt,args)
-    current_time, target_list,sched = schedule(current_time,mtwi12,df,target_list,sched,dt,args)
+    if args.fluxstd:
+        current_time, target_list,sched = schedule(current_time,etwi18,df.iloc[:2],target_list,sched,dt,args)
+    current_time, target_list,sched = schedule(current_time,etwi18,twitar,target_list,sched,dt,args)
+    current_time, target_list,sched = schedule(current_time,mtwi18,df,target_list,sched,dt,args)
     current_time, target_list,sched = schedule(current_time,times[-1],twitar,target_list,sched,dt,args)
+    if args.fluxstd:
+        current_time, target_list,sched = schedule(current_time,mtwi12,df.iloc[2:],target_list,sched,dt,args)
     print(sched)
 
 
