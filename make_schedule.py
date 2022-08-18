@@ -35,6 +35,9 @@ def parse_args():
     parser.add_argument('--takesetting', dest='takesetting',
                         action='store_false',
                         help = 'Always take a target if setting.')
+    parser.add_argument('--manual', dest='manual',
+                        action='store_true',
+                        help = 'Manual mode, take all targets in the list order.')
     parser.add_argument('--start', dest='start',
                         type = Time,
                         help = 'fmt: yyyy-mm-ddThh:mm:ss (UTC). When to start observations')
@@ -79,6 +82,15 @@ def schedule(current_time,stop_time,df,target_list,schedu,dt,args):
             boundtime = min(args.min, args.min**(1+args.x)*(target["exp_time"].sec/60)**(-args.x)) + target["exp_time"].sec/60/2
             boundtime = boundtime*u.min
             if is_observable(current_time,target["exp_time"],target["set_time"]):
+                if args.manual:
+                    start = current_time
+                    current_time = current_time + target["exp_time"]
+                    end = current_time
+                    schedu = fill_sched(schedu,target,start,end)
+                    target_list.append(i)
+                    skipped_all=False
+                    current_time = current_time +dt
+                    break
                 if args.takesetting:
                     timediff = abs(target["top_time"] - current_time)
                 else:
@@ -91,8 +103,6 @@ def schedule(current_time,stop_time,df,target_list,schedu,dt,args):
                     target_list.append(i)
                     skipped_all=False
                     current_time = current_time +dt
-                    #print(target['name'])
-                    #print(boundtime)#-target["exp_time"].sec/60/2*u.min)
                     break
         if skipped_all:
             current_time = current_time + dt
@@ -160,7 +170,9 @@ def main():
 
     #Read in target list
     df = pd.read_csv(args.targetlist,delim_whitespace=True,skiprows=1, names= ["name","ra_h","ra_m","ra_s",'dec_d','dec_m','dec_s',"mag","priority"],usecols=[0,1,2,3,4,5,6,10,11])
-    df = df.sort_values(by=['ra_h','ra_m','ra_s'])
+    
+    if not args.takeall:
+        df = df.sort_values(by=['ra_h','ra_m','ra_s'])
     radec = np.array(["%.0d:%.0d:%.2f %.0d:%.0d:%.2f"%(i[0],i[1],i[2],i[3],i[4],i[5]) for i in df[['ra_h','ra_m','ra_s','dec_d','dec_m','dec_s']].to_numpy()])
     targets = SkyCoord(radec,unit=(u.hourangle, u.deg))
     #For each target get the minimum airmass
@@ -197,7 +209,9 @@ def main():
     #df.index = np.append(a,list(set(np.arange(len(df))).difference(a)))
     #df.sort_index(inplace=True)
     #df.index.name = "settingorder"
-    df.sort_values(by=['priority','top_time'],ascending=[True,True],inplace=True)
+ 
+    if not args.takeall:
+        df.sort_values(by=['priority','top_time'],ascending=[True,True],inplace=True)
 
     current_time = times[0]
     dt = TimeDelta(5*u.min)
@@ -207,8 +221,8 @@ def main():
     sched = pd.DataFrame(columns=["target","RA","DEC","start","end","mag","priority"])
 
     twitar = df[df["mag"]<args.twimag]
-    current_time, target_list,sched = schedule(current_time,etwi18,twitar,target_list,sched,dt,args)
-    current_time, target_list,sched = schedule(current_time,mtwi18,df,target_list,sched,dt,args)
+    current_time, target_list,sched = schedule(current_time,etwi12,twitar,target_list,sched,dt,args)
+    current_time, target_list,sched = schedule(current_time,mtwi12,df,target_list,sched,dt,args)
     current_time, target_list,sched = schedule(current_time,times[-1],twitar,target_list,sched,dt,args)
     print(sched)
 
