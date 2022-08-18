@@ -171,7 +171,7 @@ def main():
     #Read in target list
     df = pd.read_csv(args.targetlist,delim_whitespace=True,skiprows=1, names= ["name","ra_h","ra_m","ra_s",'dec_d','dec_m','dec_s',"mag","priority"],usecols=[0,1,2,3,4,5,6,10,11])
     
-    if not args.takeall:
+    if not args.manual:
         df = df.sort_values(by=['ra_h','ra_m','ra_s'])
     radec = np.array(["%.0d:%.0d:%.2f %.0d:%.0d:%.2f"%(i[0],i[1],i[2],i[3],i[4],i[5]) for i in df[['ra_h','ra_m','ra_s','dec_d','dec_m','dec_s']].to_numpy()])
     targets = SkyCoord(radec,unit=(u.hourangle, u.deg))
@@ -210,7 +210,7 @@ def main():
     #df.sort_index(inplace=True)
     #df.index.name = "settingorder"
  
-    if not args.takeall:
+    if not args.manual:
         df.sort_values(by=['priority','top_time'],ascending=[True,True],inplace=True)
 
     current_time = times[0]
