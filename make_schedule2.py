@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import astropy.units as u
-from astropy.time import Time,TimeDelta
+from astropy.time import Time,TimeDelta, TimezoneInfo
 from astropy.coordinates import SkyCoord, EarthLocation, AltAz
 from astropy.coordinates import get_sun
 from scipy.interpolate import interp1d
@@ -54,7 +54,7 @@ def parse_args():
 
 
 def exposure_time(mag,data):
-    #Calculates Exposure Times
+    # Calculates Exposure Times
     exp = interp1d(data[:,0],data[:,1],kind="nearest",fill_value="extrapolate")
     #n_blue = interp1d(data[:,0],data[:,2],kind="nearest",fill_value="extrapolate")
     #n_red = interp1d(data[:,0],data[:,3],kind="nearest",fill_value="extrapolate")
@@ -69,8 +69,8 @@ def fill_sched(schedu,df,start,end):
         "DEC": ["%s:%s:%s"%(df["dec_d"],df["dec_m"],df["dec_s"])],
         "start":[start],
         "end":[end],
-        "mag":[df["mag"]],
-        "priority":[df["priority"]]
+        "mag":[df["mag"]]#,
+        #"priority":[df["priority"]]
     })
 
     schedu = pd.concat([schedu, entry], ignore_index=True)
@@ -78,103 +78,36 @@ def fill_sched(schedu,df,start,end):
 
 def set_exptime(target_list,manual,config,frame,times,inst):
     #Read in target list
-    df = pd.read_csv(target_list,delim_whitespace=True,skiprows=1, names= ["name","ra_h","ra_m","ra_s",'dec_d','dec_m','dec_s',"mag","priority"],usecols=[0,1,2,3,4,5,6,10,11])
-    
+    #df = pd.read_csv(target_list,delim_whitespace=True,skiprows=1, names= ["name","ra_h","ra_m","ra_s",'dec_d','dec_m','dec_s',"mag","priority"],usecols=[0,1,2,3,4,5,6,10,11])
+    df = pd.read_csv(target_list,delim_whitespace=True,skiprows=1, names= ["name","ra_h","ra_m","ra_s",'dec_d','dec_m','dec_s',"mag"],usecols=[0,1,2,3,4,5,6,10])
     if not manual:
         df = df.sort_values(by=['ra_h','ra_m','ra_s'])
     radec = np.array(["%.0d:%.0d:%.2f %.0d:%.0d:%.2f"%(i[0],i[1],i[2],i[3],i[4],i[5]) for i in df[['ra_h','ra_m','ra_s','dec_d','dec_m','dec_s']].to_numpy()])
     targets = SkyCoord(radec,unit=(u.hourangle, u.deg))
     #For each target get the minimum airmass
-    #airmasses=[]
     dts=[]
-    alts=[]
-    set_time=[]
-    #import pdb
-    #pdb.set_trace()
     for i,target in enumerate(targets):
-        airmass = target.transform_to(frame).secz
-        mask = airmass<1
-        airmass[mask] = 999
-        #airmasses.append(airmass)
-        if min(airmass)>4:
-            print("%s has a minimum airmass higher than 4!"%df.iloc[i]['name'])
-            #eliminate target here TODO
-        if sum(np.diff((airmass>=5)*1)==1) == 0:
-            #target doesn't set
-            print(times[-1])
-            set_time.append(times[-1])
-        else:
-            settime = times[:-1][np.diff((airmass>=5)*1)==1]
-        #if len(settime)>0:
-            set_time.append(settime[0])
-        #else:
-        #    set_time.append(times[-1])
-        alts.append(times[np.argmin(airmass)])
         expdata = np.loadtxt(config[inst]['exp_file'])
         dt = TimeDelta(exposure_time(df.iloc[i]['mag'],expdata)*u.min)
         dts.append(dt)
     df["exp_time"] = np.array(dts)
-    df["top_time"] = np.array(alts)
-    df["set_time"] = np.array(set_time)
-    if not manual:
-        df.sort_values(by=['priority','top_time'],ascending=[True,True],inplace=True)
-    #airmasses = np.array(airmasses)
     return df
 
 def schedule(current_time,stop_time,df,target_list,schedu,dt,args):
-    priorities = list(set(df["priority"]))
-    #current_length=len(target_list)
+    #priorities = list(set(df["priority"]))
     while current_time < stop_time:
-        skipped_all=True
         for j,target in df.iterrows():
-            if j in target_list:
-                continue
-            #elif len(target_list)>15:
-            #    import pdb
-            #    pdb.set_trace()
-
-            boundtime = min(args.min, args.min**(1+args.x)*(target["exp_time"].sec/60)**(-args.x)) + target["exp_time"].sec/60/2
-            boundtime = boundtime*u.min
-            if is_observable(current_time,target["exp_time"],target["set_time"]):
-                if args.manual:
-                    start = current_time
-                    current_time = current_time + target["exp_time"]
-                    end = current_time
-                    schedu = fill_sched(schedu,target,start,end)
-                    target_list.append(j)
-                    skipped_all=False
-                    current_time = current_time +dt
-                    break
-                if args.takesetting:
-                    timediff = abs(target["top_time"] - current_time)
-                else:
-                    timediff = target["top_time"] - current_time
-                if boundtime > timediff:
-                    start = current_time
-                    current_time = current_time + target["exp_time"]
-                    end = current_time
-                    schedu = fill_sched(schedu,target,start,end)
-                    target_list.append(j)
-                    skipped_all=False
-                    current_time = current_time +dt
-                    break
-        if skipped_all:
-            current_time = current_time + dt
+            start = current_time
+            current_time = current_time + target["exp_time"]
+            end = current_time
+            schedu = fill_sched(schedu,target,start,end)
+            target_list.append(j)
+            skipped_all=False
+            current_time = current_time +dt
     return current_time,target_list,schedu
 
-def is_observable(time,dt,setting):
-    if time+dt < setting:
-        return True
-    else:
-        return False
-def is_setting(time,toptime):
-    if time >= toptime:
-        return True
-    else:
-        return False
-
 def gethour(time):
-    PDT = (time - 7*u.hour).ymdhms
+    PDT = (time - 8*u.hour).ymdhms
     PDT = "%02d:%02d"%(PDT[3],PDT[4])
     UTC = time.ymdhms
     utchour = float(UTC[3])+float(UTC[4])/60
@@ -188,14 +121,18 @@ def main():
     inst = args.instrument
     # Establish observatory, sunset and twighlights
     obs = EarthLocation(lat=float(config[inst]['lat'])*u.deg,
-            lon=float(config[inst]['lon'])*u.deg, 
+            lon=float(config[inst]['lon'])*u.deg,
             height=float(config[inst]['height'])*u.m)
-    utcoffset = -7*u.hour  # Assuming Pacific Time (Lick)
+
+    utcoffset = -8*u.hour  # Assuming Pacific Time (Lick)
     if args.date:
         midnight = args.date - utcoffset
     else:
-        date_str = args.targetlist.split("_")[1].split(".")[0]
-        midnight = Time(date_str) - utcoffset
+        try:
+            date_str = args.targetlist.split("_")[1].split(".")[0]
+            midnight = Time(date_str) - utcoffset
+        except:
+            print("File name does not include the date nor did you input a date in args. Please do one of the two.")
 
     delta_midnight = np.linspace(-12, 12, 1000)*u.hour
     times = midnight + delta_midnight
@@ -227,11 +164,11 @@ def main():
     #df = pd.concat([fluxtar.iloc[:2],df,fluxtar.iloc[2:]])
     df = df.reset_index(drop=True)
     current_time = times[0]
-    dt = TimeDelta(5*u.min)
+    dt = TimeDelta(7*u.min)
     x = args.x
     target_list = []
 
-    sched = pd.DataFrame(columns=["target","RA","DEC","start","end","mag","priority"])
+    sched = pd.DataFrame(columns=["target","RA","DEC","start","end","mag"])#,"priority"])
 
     twitar = df[df["mag"]<args.twimag]
     #if args.fluxstd:
@@ -284,7 +221,7 @@ def main():
         targetaltazs = coords.transform_to(frame)
         plottime = np.array([tt[3]+tt[4]/60.+tt[5]/60./60. for tt in times.to_value("ymdhms")])*u.hour
         cmap = cm.get_cmap('Dark2')
-        ax.plot(plottime, targetaltazs.secz,label=target["target"],linestyle=style[target['priority']-1])
+        ax.plot(plottime, targetaltazs.secz,label=target["target"])#,linestyle=style[target['priority']-1])
     plt.axvline(x=sunsethour,color='orange')
     plt.axvline(x=sunrisehour,color='orange')
     plt.axvline(x=etw12hour)
@@ -309,8 +246,8 @@ def main():
 
     plot_lines.append([l1, l2, l3])
 
-    legend1 = plt.legend(plot_lines[0], ["priority 1", "priority 2", "priority 3"], bbox_to_anchor =(1.25, 0.0))
-    plt.gca().add_artist(legend1)
+    #legend1 = plt.legend(plot_lines[0], ["priority 1", "priority 2", "priority 3"], bbox_to_anchor =(1.25, 0.0))
+    #plt.gca().add_artist(legend1)
     plt.savefig(filename+'_Sched.png')
     plt.show()
 
