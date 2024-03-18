@@ -107,7 +107,7 @@ def schedule(current_time,stop_time,df,target_list,schedu,dt,args):
     return current_time,target_list,schedu
 
 def gethour(time):
-    PDT = (time - 8*u.hour).ymdhms
+    PDT = (time - 7*u.hour).ymdhms
     PDT = "%02d:%02d"%(PDT[3],PDT[4])
     UTC = time.ymdhms
     utchour = float(UTC[3])+float(UTC[4])/60
@@ -124,7 +124,7 @@ def main():
             lon=float(config[inst]['lon'])*u.deg,
             height=float(config[inst]['height'])*u.m)
 
-    utcoffset = -8*u.hour  # Assuming Pacific Time (Lick)
+    utcoffset = -7*u.hour  # Assuming Pacific Time (Lick)
     if args.date:
         midnight = args.date - utcoffset
     else:
@@ -164,7 +164,7 @@ def main():
     #df = pd.concat([fluxtar.iloc[:2],df,fluxtar.iloc[2:]])
     df = df.reset_index(drop=True)
     current_time = times[0]
-    dt = TimeDelta(7*u.min)
+    dt = TimeDelta(5*u.min)
     x = args.x
     target_list = []
 
